@@ -1,101 +1,185 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+import { useState, useEffect } from 'react';
+import { amazonQuestions } from '@/data/questions';
+import QuestionCard from '@/components/QuestionCard';
+import Timer from '@/components/Timer';
+import TimerCompletionMessage from '@/components/TimerCompletionMessage';
+import SessionStart from '@/components/SessionStart';
+import SessionProgress from '@/components/SessionProgress';
+import SessionSummary from '@/components/SessionSummary';
+import { AnimatePresence } from 'framer-motion';
+import {
+  Session,
+  createNewSession,
+  moveToNextQuestion,
+  moveToPreviousQuestion,
+  jumpToQuestion,
+  getCurrentQuestion,
+  isSessionComplete
+} from '@/utils/sessionManager';
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+type AppState = 'start' | 'session' | 'complete';
+
+export default function InterviewPage() {
+  const [appState, setAppState] = useState<AppState>('start');
+  const [session, setSession] = useState<Session | null>(null);
+  const [showCompletionMessage, setShowCompletionMessage] = useState(false);
+  const [timerKey, setTimerKey] = useState(Date.now()); // Add timer key for resetting
+  
+  // Start a new session
+  const handleStartSession = (questionsCount: number) => {
+    const newSession = createNewSession(amazonQuestions, questionsCount);
+    setSession(newSession);
+    setAppState('session');
+    resetTimer(); // Reset timer when starting a new session
+  };
+  
+  // Handle next question
+  const handleNext = () => {
+    if (session) {
+      if (isSessionComplete(session)) {
+        setAppState('complete');
+      } else {
+        setSession(moveToNextQuestion(session));
+        resetTimer(); // Reset timer when moving to next question
+      }
+    }
+  };
+  
+  // Handle previous question
+  const handlePrevious = () => {
+    if (session) {
+      setSession(moveToPreviousQuestion(session));
+      resetTimer(); // Reset timer when moving to previous question
+    }
+  };
+  
+  // Jump to a specific question
+  const handleJumpToQuestion = (index: number) => {
+    if (session) {
+      setSession(jumpToQuestion(session, index));
+      resetTimer(); // Reset timer when jumping to a specific question
+    }
+  };
+  
+  // Reset the timer by updating its key
+  const resetTimer = () => {
+    setTimerKey(Date.now());
+  };
+  
+  // Handle timer complete
+  const handleTimerComplete = () => {
+    setShowCompletionMessage(true);
+  };
+  
+  // Handle completion message close
+  const handleCompletionMessageClose = () => {
+    setShowCompletionMessage(false);
+    
+    // Auto-advance to next question if not at the end
+    if (session && !isSessionComplete(session)) {
+      handleNext();
+    }
+  };
+  
+  // Check if we should show the current question
+  const shouldShowQuestion = appState === 'session' && session !== null;
+  const currentQuestion = shouldShowQuestion ? getCurrentQuestion(session) : null;
+
+  // Render different states
+  const renderContent = () => {
+    switch (appState) {
+      case 'start':
+        return (
+          <SessionStart 
+            onStartSession={handleStartSession} 
+            totalQuestionsAvailable={amazonQuestions.length} 
+          />
+        );
+        
+      case 'session':
+        return session && (
+          <div className="w-full">
+            {/* Question Card */}
+            <div className="relative mb-8">
+              <AnimatePresence mode="wait">
+                {currentQuestion && (
+                  <QuestionCard
+                    key={currentQuestion.id}
+                    question={currentQuestion}
+                    currentIndex={session.currentQuestionIndex}
+                    totalQuestions={session.questions.length}
+                  />
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Timer - Key is updated to reset timer and autoStart set to true */}
+            <div className="w-full flex justify-center mb-8">
+              <Timer 
+                key={timerKey}
+                duration={60} 
+                onComplete={handleTimerComplete}
+                autoStart={true}
+              />
+            </div>
+
+            {/* Navigation */}
+            <SessionProgress 
+              session={session}
+              onNext={handleNext}
+              onPrevious={handlePrevious}
+              onJumpToQuestion={handleJumpToQuestion}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+          </div>
+        );
+        
+      case 'complete':
+        return session && (
+          <SessionSummary 
+            session={session}
+            onStartNewSession={() => setAppState('start')}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        );
+        
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <main className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-gray-900 dark:to-indigo-950 py-8 px-4 sm:px-6 md:py-12 lg:px-8">
+      <div className="max-w-3xl mx-auto">
+        {/* Header - Only shown during session */}
+        {appState === 'session' && (
+          <header className="text-center mb-8">
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-white mb-2">
+              Amazon Behavioral Interview
+            </h1>
+            <p className="text-gray-600 dark:text-gray-300">
+              Practice answering common Amazon behavioral interview questions with a 1-minute timer
+            </p>
+          </header>
+        )}
+
+        {/* Main content area */}
+        {renderContent()}
+
+        {/* Footer - Only shown during session */}
+        {appState === 'session' && (
+          <footer className="mt-16 text-center text-sm text-gray-500 dark:text-gray-400">
+            <p>Designed to help you prepare for Amazon behavioral interviews</p>
+            <p className="mt-1">Remember to use the STAR method in your responses</p>
+          </footer>
+        )}
+      </div>
+      
+      {/* Timer Completion Message */}
+      <TimerCompletionMessage 
+        isVisible={showCompletionMessage} 
+        onClose={handleCompletionMessageClose} 
+      />
+    </main>
   );
 }
